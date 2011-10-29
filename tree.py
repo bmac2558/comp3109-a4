@@ -14,7 +14,7 @@ class CFGraph(object):
             self.statements.append(node)
 
             # add the next pointer to the previous statement
-            if last and child.type not in (lex.BLOCK, lex.GOTO):
+            if last and child.type != lex.BLOCK:
                 last.next[LINR] = node
 
             if child.type == lex.BLOCK:
@@ -33,33 +33,28 @@ class CFGraph(object):
                 if target not in blocks:
                     blocks[target] = None
 
-                if child.type == lex.IFGOTO:
-                    # conditional goto
-                    last = node
-                else:
-                    # unconditional goto
+                if child.type == lex.GOTO:
                     last = None
+                else:
+                    last = node
 
             else:
                 # assignment statement
                 last = node
 
-        for stmt in self.statements:
-            print stmt
+        print 'Without GOTOs:'
+        print self
 
         # link via goto statements
         last = None
         for i, stmt in enumerate(self.statements):
             if stmt.type in (lex.GOTO, lex.IFGOTO):
                 target = root.children[i].children[0].text
-                print root.children[i].children
-                print [(c.type, c.text) for c in root.children[i].children]
-                print target
+                stmt.next[GOTO] = self.statements[blocks[target]]
+
                 if stmt.type == lex.GOTO:
-                    last.next[GOTO] = self.statements[blocks[target]]
                     last = None
                 else:
-                    stmt.next[GOTO] = self.statements[blocks[target]]
                     last = stmt
 
             elif stmt.type == lex.RETURN:
@@ -68,21 +63,15 @@ class CFGraph(object):
             else:
                 last = stmt
 
-###        last = None
-###        for i, stmt in enumerate(statements):
-
-###        for stmt in self.statements:
-
-        for stmt in self.statements:
-            print stmt
+        print 'With GOTOs:'
+        print self
             
     def dotfile(self, fileobj):
         fileobj.write('digraph CFGraph {\n')
 
         for stmt in self.statements:
-            if stmt.type not in (lex.BLOCK, lex.GOTO):
-                fileobj.write('    s{0} [label="{1}"] [shape="box"];\n'.format(
-                    stmt.num, stmt.stmt))
+            fileobj.write('    s{0} [label="{1}"] [shape="box"];\n'.format(
+                stmt.num, stmt.stmt))
 
         for stmt in self.statements:
             for edge_type in (LINR, GOTO):
@@ -91,6 +80,9 @@ class CFGraph(object):
                     fileobj.write('    s{0} -> s{1};\n'.format(stmt.num, target.num))
 
         fileobj.write('}\n')
+
+    def __repr__(self):
+        return '\n'.join([repr(stmt) for stmt in self.statements])
             
 class Statement(object):
     """Has a statement for evaluation and a list of pointers to the next Statements"""
