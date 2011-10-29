@@ -21,6 +21,7 @@ ${ANTLR_TAR}:
 
 ${ANTLR_DIR}: ${ANTLR_TAR}
 	tar zxf ${ANTLR_DIR}.tar.gz
+	@touch ${ANTLR_DIR}
 
 ${BUILD_DIR}/__init__.py: ${ANTLR_DIR} ${BUILD_DIR} ${GRAMMAR_FILE}
 	java -cp ${ANTLR_JAR} org.antlr.Tool -o ${BUILD_DIR} ${GRAMMAR_FILE}
