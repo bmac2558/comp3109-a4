@@ -109,9 +109,9 @@ class CFGraph(object):
     def dotfile(self, fileobj):
         """Write to fileobj a .dot (GraphViz) representation of the graph."""
 
-        """fileobj.write('digraph CFGraph {\n')
+        fileobj.write('digraph CFGraph {\n')
 
-        # declare all the nodes (typically staements)
+        """# declare all the nodes (typically staements)
         fileobj.write('    start;\n')
         for stmt in self.statements:
             if stmt.type not in (lex.BLOCK, lex.GOTO):
@@ -129,30 +129,29 @@ class CFGraph(object):
 
         fileobj.write('}\n')"""
 
-        fileobj.write('digraph CFGraph {\n')
         cur_node = [self.start]
-        written_nodes = [self.start]
-        fileobj.write('start;\n')
+        written_nodes = []
+        fileobj.write('    start;\n')
+        fileobj.write('    s{0} [label="{1}"] [shape="box"];\n'
+                      .format(self.start.num, self.start.stmt))
         for node in cur_node:
             for edge in node.next:
                 if edge not in written_nodes and edge != None:
                     cur_node.append(edge)
-                    fileobj.write ('s{0} [label="{1}"] [shape="box"];\n'
-                            .format(edge.num, edge.stmt))
-                    written_nodes.append(edge)
-            cur_node.remove(node)
+                    fileobj.write('    s{0} [label="{1}"] [shape="box"];\n'
+                                   .format(edge.num, edge.stmt))
+                    written_nodes.append(node)
         
         fileobj.write('    start -> s{0};\n'.format(self.start.num))
         cur_node = [self.start]
-        written_nodes = [self.start]
+        written_edges = []
         for node in cur_node:
-            for edge in node.next:
-                if edge not in written_nodes and edge != None:
-                    cur_node.append(edge)
+            for target_node in node.next:
+                if (node, target_node) not in written_edges and target_node != None:
+                    cur_node.append(target_node)
                     fileobj.write('    s{0} -> s{1};\n'
-                                  .format(node.num, edge.num))
-                    written_nodes.append(edge)
-            cur_node.remove(node)
+                                  .format(node.num, target_node.num))
+                    written_edges.append((node, target_node))
 
         fileobj.write('}\n')
 
