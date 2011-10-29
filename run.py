@@ -11,12 +11,12 @@ def main(fileobj):
     parser = JumpParser(tokens)
     root = parser.prog()
 
+    print root.tree.toStringTree()
+
     graph = CFGraph(root.tree)
 
     with open('cfg.dot', 'w') as f:
         graph.dotfile(f)
-
-    print root.tree.toStringTree()
 
 
 if __name__ == '__main__':

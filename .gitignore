@@ -4,6 +4,8 @@ build
 env
 *~
 .*.swp
+*.dot
 *.jar
+*.png
 *.pyc
 *.s

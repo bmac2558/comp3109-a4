@@ -32,7 +32,7 @@ label   : LABEL COL -> ^(BLOCK LABEL) ;
 stmt    : IDENT EQUAL expr -> ^(IDENT EQUAL expr)
         | IDENT EQUAL expr OP expr2 -> ^(IDENT EQUAL expr OP expr2)
         | GOTO LABEL -> ^(GOTO LABEL)
-        | IF expr GOTO LABEL -> ^(IF expr GOTO LABEL)
+        | IF expr GOTO LABEL -> ^(IFGOTO LABEL expr)
         | RETURN expr -> ^(RETURN expr)
         ;
 
