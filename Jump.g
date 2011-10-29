@@ -18,6 +18,7 @@ tokens {
     STATEMENT;
     OPEQUAL;
     IFGOTO;
+    BLOCK;
 }
 
 prog :	statement* EOF -> ^(PROGRAM statement*) ;
@@ -26,17 +27,20 @@ statement   : stmt SCOL!
             | label stmt SCOL!
             ;
 
-label   : LABEL COL! ;
+label   : LABEL COL -> ^(BLOCK LABEL) ;
 
-stmt    : IDENT EQUAL expr -> ^(EQUAL IDENT expr)
-        | IDENT EQUAL expr OP expr -> ^(OPEQUAL IDENT ^(OP expr*))
+stmt    : IDENT EQUAL expr -> ^(IDENT EQUAL expr)
+        | IDENT EQUAL expr OP expr2 -> ^(IDENT EQUAL expr OP expr2)
         | GOTO LABEL -> ^(GOTO LABEL)
-        | IF expr GOTO LABEL -> ^(IFGOTO LABEL expr)
+        | IF expr GOTO LABEL -> ^(IF expr GOTO LABEL)
         | RETURN expr -> ^(RETURN expr)
         ;
 
 expr    : IDENT
         | NUM
+        ;
+
+expr2   : expr
         ;
 
 OP      :   ('+'|'-'|'*'|'/'|'<'|'>'|'==') ;

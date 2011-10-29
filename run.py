@@ -3,12 +3,18 @@ import sys
 import antlr3
 from build.JumpLexer import JumpLexer
 from build.JumpParser import JumpParser
+from tree import CFGraph
 
 def main(fileobj):
     char_stream = antlr3.ANTLRInputStream(fileobj)
     tokens = antlr3.CommonTokenStream(JumpLexer(char_stream))
     parser = JumpParser(tokens)
     root = parser.prog()
+
+    graph = CFGraph(root.tree)
+
+    with open('cfg.dot', 'w') as f:
+        graph.dotfile(f)
 
     print root.tree.toStringTree()
 
