@@ -109,7 +109,7 @@ class CFGraph(object):
     def dotfile(self, fileobj):
         """Write to fileobj a .dot (GraphViz) representation of the graph."""
 
-        fileobj.write('digraph CFGraph {\n')
+        """fileobj.write('digraph CFGraph {\n')
 
         # declare all the nodes (typically staements)
         fileobj.write('    start;\n')
@@ -127,7 +127,35 @@ class CFGraph(object):
                     fileobj.write('    s{0} -> s{1};\n'
                                   .format(stmt.num, target.num))
 
+        fileobj.write('}\n')"""
+
+        fileobj.write('digraph CFGraph {\n')
+        cur_node = [self.start]
+        written_nodes = [self.start]
+        fileobj.write('start;\n')
+        for node in cur_node:
+            for edge in node.next:
+                if edge not in written_nodes and edge != None:
+                    cur_node.append(edge)
+                    fileobj.write ('s{0} [label="{1}"] [shape="box"];\n'
+                            .format(edge.num, edge.stmt))
+                    written_nodes.append(edge)
+            cur_node.remove(node)
+        
+        fileobj.write('    start -> s{0};\n'.format(self.start.num))
+        cur_node = [self.start]
+        written_nodes = [self.start]
+        for node in cur_node:
+            for edge in node.next:
+                if edge not in written_nodes and edge != None:
+                    cur_node.append(edge)
+                    fileobj.write('    s{0} -> s{1};\n'
+                                  .format(node.num, edge.num))
+                    written_nodes.append(edge)
+            cur_node.remove(node)
+
         fileobj.write('}\n')
+
 
     def __repr__(self):
         return '\n'.join([repr(stmt) for stmt in self.statements])
