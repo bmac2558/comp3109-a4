@@ -6,9 +6,8 @@ ANTLR_PKG=http://www.antlr.org/download/${ANTLR_TAR}
 
 BUILD_DIR=build
 GRAMMAR_FILE=Jump.g
-PYTREE_DIR=a4tree
 
-.PHONY: all clean test
+.PHONY: all clean test tidy
 
 all: ${BUILD_DIR}/__init__.py
 
@@ -30,5 +29,8 @@ ${BUILD_DIR}/__init__.py: ${ANTLR_DIR} ${BUILD_DIR} ${GRAMMAR_FILE}
 test: all
 	bash test.sh
 
-clean:
-	rm -r a4 ${ANTLR_DIR} ${BUILD_DIR} *.pyc ${PYTREE_DIR}/*.pyc
+tidy:
+	rm -r ${BUILD_DIR} *.pyc
+
+clean: tidy
+	rm -r ${ANTLR_DIR}

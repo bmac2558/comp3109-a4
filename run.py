@@ -3,7 +3,7 @@ import sys
 import antlr3
 from build.JumpLexer import JumpLexer
 from build.JumpParser import JumpParser
-from tree import CFGraph
+from graph import CFGraph
 
 def main(fileobj):
     char_stream = antlr3.ANTLRInputStream(fileobj)
@@ -14,6 +14,9 @@ def main(fileobj):
     print root.tree.toStringTree()
 
     graph = CFGraph(root.tree)
+
+    print graph
+    print "Start Num: {0:0>2}".format(graph.start.num)
 
     with open('cfg.dot', 'w') as f:
         graph.dotfile(f)
