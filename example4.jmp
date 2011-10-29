@@ -1,0 +1,4 @@
+L1:
+  goto L2;
+L2:
+  goto L1;

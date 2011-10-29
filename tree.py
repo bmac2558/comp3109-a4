@@ -65,14 +65,57 @@ class CFGraph(object):
 
         print 'With GOTOs:'
         print self
-            
+
+        idx = 0
+        while self.statements[idx].type == lex.BLOCK:
+            idx += 1
+        
+        if idx > len(self.statements):
+            raise ValueError("Cannot find me entry statement!")
+        self.start = self.statements[idx]
+        print "Start:", self.start
+
+        # eliminate GOTOs
+        for stmt in self.statements:
+            for k in xrange(2):
+                snext = stmt.next[k]
+
+                if snext != None:
+
+                    move_start = False
+                    if self.start == stmt and stmt.type == lex.GOTO:
+                        print "Moving start ({0})".format(stmt)
+                        move_start = True
+
+                    visited = []
+                    while snext.type == lex.GOTO:
+                        if snext in visited:
+                            raise ValueError("OMG INFINITE LOOPSIES!")
+                        visited.append(snext)
+                        snext = snext.next[GOTO]
+
+                    stmt.next[k] = snext
+                    if move_start:
+                        self.start = snext
+
+        for stmt in self.statements:
+            if stmt.type == lex.GOTO:
+                stmt.next = [None, None]
+
+        print 'With GOTO elimination:'
+        print self
+        print "Start:", self.start
+
     def dotfile(self, fileobj):
         fileobj.write('digraph CFGraph {\n')
 
+        fileobj.write('    start;\n')
         for stmt in self.statements:
-            fileobj.write('    s{0} [label="{1}"] [shape="box"];\n'.format(
-                stmt.num, stmt.stmt))
+            if stmt.type not in (lex.BLOCK, lex.GOTO):
+                fileobj.write('    s{0} [label="{1}"] [shape="box"];\n'.format(
+                    stmt.num, stmt.stmt))
 
+        fileobj.write('    start -> s{0};\n'.format(self.start.num))
         for stmt in self.statements:
             for edge_type in (LINR, GOTO):
                 target = stmt.next[edge_type]

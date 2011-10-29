@@ -1,0 +1,9 @@
+  goto L1;
+  a = 2;
+L2:
+  b = 0;
+  goto L1;
+L1:
+  goto L2;
+  b = a + b;
+  return b;
