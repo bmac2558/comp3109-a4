@@ -1,3 +1,4 @@
+from collections import defaultdict
 import build.JumpLexer as lex
 
 from graph import JumpSyntaxError
@@ -117,6 +118,7 @@ class CFGraph(object):
 
     def optimise(self):
         self.UCE()
+###        self.DCE()
 
     def UCE(self):
         """Unreachable code elimination."""
@@ -131,6 +133,46 @@ class CFGraph(object):
 
         self.statements = sorted(cur_nodes, key=lambda x: x.num)
 
+    def DCE(self):
+        """Dead code elimination."""
+
+        # first, find all backrefs of GOTOs
+        # { stmt: [ ( prev, type ), ... ], ... }; type in (LINR, GOTO, IFGOTO)
+        backrefs = defaultdict(list)
+        terminal_nodes = []
+        for stmt in self.statements:
+
+            if stmt.next == [None, None, None]:
+                terminal_nodes.append(stmt)
+                continue
+
+            for edge_type in (LINR, GOTO, IFGOTO):
+                target = stmt.next[edge_type]
+                if target is not None:
+                    backrefs[target].append((stmt, edge_type))
+        print
+###        print "RIGHT HERE BOYZ!"
+###        for key in sorted(backrefs.keys(), key=lambda x: x.num):
+###            print key, backrefs[key]
+        print "Terminal Nodes:", terminal_nodes
+
+        gen = lambda stmt: set(stmt.rhs)
+        kill = lambda stmt: set(stmt.lhs)
+        fn = lambda node, x: gen(node).union((x - kill(node)))
+
+        def out_stmt(stmt):
+            in_ = set()
+            for edge in statement.next:
+                if edge:
+                    in_ |= out_stmt(edge)
+
+            return fn(stmt, in_)
+
+        for terminal in terminal_nodes:
+            in_ = set()
+            out = set()
+
+
     def generate(self):
         gotos = {}  # maps goto targets to unique numbers
         gotos[self.statements[0]] = 0
@@ -140,8 +182,6 @@ class CFGraph(object):
                 gotos[stmt.next[GOTO]] = len(gotos)
             if stmt.next[IFGOTO]:
                 gotos[stmt.next[IFGOTO]] = len(gotos)
-
-###        print gotos
 
         for stmt in self.statements:
             label_num = gotos.get(stmt)

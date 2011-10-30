@@ -1,6 +1,30 @@
 import build.JumpLexer as lex
 
+from graph import JumpSyntaxError
 from graph import LINR, GOTO, IFGOTO
+
+class Literal(object):
+    def __init__(self, node):
+        self.type = lex.NUM
+        self.value = int(node.text)
+    def __repr__(self):
+        return str(self.value)
+
+class Variable(object):
+    def __init__(self, node):
+        self.type = lex.IDENT
+        self.name = node.text
+    def __repr__(self):
+        return self.name
+
+def get_varlit(node, force=None):
+    if force is None or node.type == force:
+        if node.type == lex.NUM:
+            return Literal(node)
+        if node.type == lex.IDENT:
+            return Variable(node)
+
+    raise JumpSyntaxError("Inappropriate type '{0}'.".format(node.type))
 
 class Statement(object):
     """Has a statement for evaluation and a list of pointers to the next Statements"""
@@ -9,6 +33,7 @@ class Statement(object):
         self.type = node.type
         self.stmt = node.toStringTree()
         self.next = [None, None, None]  # LINR, GOTO, IFGOTO
+        self.lhs = self.rhs = []
 
     def generate(self, gotos):
         if self.next[GOTO]:
@@ -27,7 +52,8 @@ class Statement(object):
 class ReturnStmt(Statement):
     def __init__(self, node, num):
         super(ReturnStmt, self).__init__(node, num)
-        self.var = node.children[0].text
+        self.var = get_varlit(node.children[0], lex.IDENT)
+        self.rhs = [self.var]
 
     def generate(self, gotos):
         yield '  return {0};'.format(self.var)
@@ -37,8 +63,10 @@ class ReturnStmt(Statement):
 class AssignStmt(Statement):
     def __init__(self, node, num):
         super(AssignStmt, self).__init__(node, num)
-        self.var = node.children[0].text
-        self.source = node.children[1].text
+        self.var = get_varlit(node.children[0], lex.IDENT)
+        self.lhs = [self.var]
+        self.source = get_varlit(node.children[1])
+        self.rhs = [self.source] if isinstance(self.source, Variable) else []
 
     def generate(self, gotos):
         yield '  {0} = {1};'.format(self.var, self.source)
@@ -48,9 +76,12 @@ class AssignStmt(Statement):
 class AssignOpStmt(Statement):
     def __init__(self, node, num):
         super(AssignOpStmt, self).__init__(node, num)
-        self.var = node.children[0].text
+        self.var = get_varlit(node.children[0], lex.IDENT)
+        self.lhs = [self.var]
         self.operator = node.children[2].text
-        self.operands = [node.children[1].text, node.children[3].text]
+        self.operands = [get_varlit(node.children[1]),
+                         get_varlit(node.children[3])]
+        self.rhs = [oper for oper in self.operands if isinstance(oper, Variable)]
 
     def generate(self, gotos):
         yield '  {0} = {1} {2} {3};'.format(self.var, self.operands[0],
