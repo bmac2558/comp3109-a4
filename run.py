@@ -3,7 +3,7 @@ import sys
 import antlr3
 from build.JumpLexer import JumpLexer
 from build.JumpParser import JumpParser
-from graph import CFGraph
+from graph.cfg import CFGraph
 
 def main(fileobj):
     char_stream = antlr3.ANTLRInputStream(fileobj)
@@ -15,13 +15,17 @@ def main(fileobj):
 
     graph = CFGraph(root.tree)
 
-###    print graph
-    print "Start Num: {0:0>2}".format(graph.start.num)
-
     graph.UCE()
+    print "Start Num: {0:0>2}".format(graph.start.num)
+    print
+    print "===> Unoptimised:"
     print graph
-
-    print 'Reconstituted:'
+    graph.optimise()
+    print
+    print "===> Optimised:"
+    print graph
+    print
+    print '===> Reconstituted:'
     for line in graph.generate():
         print line
 

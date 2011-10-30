@@ -1,4 +1,11 @@
-L1:
-  goto L2;
+  a = 30;
+  b = a / 5;
+  b = 9 - b;
+  c = b * 4;
+  d = c < 10;
+  if d goto L2;
+  c = c - 10;
 L2:
-  goto L1;
+  e = 60 / a;
+  c = c * e;
+  return c;

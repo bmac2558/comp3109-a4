@@ -15,10 +15,11 @@ tokens {
 
     PROGRAM;
     ASSIGN;
+    ASSIGNOP;
     STATEMENT;
     OPEQUAL;
     IFGOTO;
-    BLOCK;
+    REFLABEL;
 }
 
 prog :	statement* EOF -> ^(PROGRAM statement*) ;
@@ -27,10 +28,10 @@ statement   : stmt SCOL!
             | label stmt SCOL!
             ;
 
-label   : LABEL COL -> ^(BLOCK LABEL) ;
+label   : LABEL COL -> ^(REFLABEL LABEL) ;
 
-stmt    : IDENT EQUAL expr -> ^(IDENT EQUAL expr)
-        | IDENT EQUAL expr OP expr2 -> ^(IDENT EQUAL expr OP expr2)
+stmt    : IDENT EQUAL expr -> ^(ASSIGN IDENT expr)
+        | IDENT EQUAL expr OP expr2 -> ^(ASSIGNOP IDENT expr OP expr2)
         | GOTO LABEL -> ^(GOTO LABEL)
         | IF expr GOTO LABEL -> ^(IFGOTO LABEL expr)
         | RETURN expr -> ^(RETURN expr)
