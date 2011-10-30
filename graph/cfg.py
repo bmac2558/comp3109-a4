@@ -152,6 +152,10 @@ class CFGraph(object):
         print
         print "  ---> Post-UCE:"
         print self
+        self.JE()
+        print
+        print "  ---> Post-J:"
+        print self
         self.DCE()
         print
         print "  ---> Post-DCE:"
@@ -169,6 +173,48 @@ class CFGraph(object):
                     cur_nodes.append(target_node)
 
         self.statements = sorted(cur_nodes, key=lambda x: x.num)
+
+    def JE(self):
+        assert not self.gotos_expanded
+
+        dists = dict()
+        todo = [(self.start, 0)]
+        visited = set()
+        while todo:
+            curr, dist = todo.pop(0)
+            dists[curr] = dist
+            todo.extend((t, dist + 1) for t in curr.next
+                        if t and t not in visited)
+            visited.update(set([t for t in curr.next if t]))
+
+        # make a best-effort attempt to have as many stmts with one LINR
+        # parent (backref) as possible
+        backrefs = self.get_backrefs()
+        for stmt, parents in backrefs.iteritems():
+            if stmt == self.start:
+                continue
+
+            existing_linr = [p for p, edge_type in parents if edge_type == LINR]
+            assert len(existing_linr) <= 1, "Cannot have multiple linear parents."
+            existing_linr = existing_linr[0] if existing_linr else None
+
+            f = lambda p: dists[p[0]]  # distance of parent from start node
+            for parent, edge_type in sorted(parents, key=f):
+                if parent == stmt:
+                    continue
+                if parent == existing_linr:
+                    break
+                if edge_type == GOTO and parent.next[LINR] is None:
+                    parent.next[LINR] = stmt
+                    parent.next[GOTO] = None
+                    idx = backrefs[stmt].index((parent, GOTO))
+                    backrefs[stmt][idx] = (parent, LINR)
+                    if existing_linr:
+                        existing_linr.next[LINR] = None
+                        existing_linr.next[GOTO] = stmt
+                        idx = backrefs[stmt].index((existing_linr, LINR))
+                        backrefs[stmt][idx] = (existing_linr, GOTO)
+                    break
 
     def DCE(self):
         """Dead code elimination."""
