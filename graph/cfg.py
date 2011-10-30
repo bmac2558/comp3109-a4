@@ -1,3 +1,4 @@
+import sys
 from collections import defaultdict
 import build.JumpLexer as lex
 
@@ -160,11 +161,13 @@ class CFGraph(object):
         kill = lambda stmt: set(stmt.lhs)
         fn = lambda node, x: gen(node).union((x - kill(node)))
 
-        def out_stmt(stmt):
+        def out_stmt(stmt, visited=None):
+            visited = visited or []
             in_ = set()
             for edge in stmt.next:
-                if edge:
-                    in_ |= out_stmt(edge)[0]
+                if edge and edge not in visited:
+                    visited.append(edge)
+                    in_ |= out_stmt(edge, visited)[0]
 
             kill_it = (len(kill(stmt) - in_) > 0)
             print "IN:", in_, stmt
@@ -190,9 +193,16 @@ class CFGraph(object):
 
             self.statements.remove(stmt)
 
-        todo = terminal_nodes
+        sys.setrecursionlimit(20)
+        todo = []
+        todo.extend(terminal_nodes)
+        visited = []
         while todo:
+            print stmt
             stmt = todo.pop(0)
+            if stmt in visited:
+                continue
+            visited.append(stmt)
             in_ = set()
             out, kill_it = out_stmt(stmt)
             print "OUT", out, kill_it, stmt

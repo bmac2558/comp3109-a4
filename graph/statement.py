@@ -106,7 +106,8 @@ class AssignOpStmt(Statement):
 class IfGotoStmt(Statement):
     def __init__(self, node, num):
         super(IfGotoStmt, self).__init__(node, num)
-        self.cond = node.children[1].text
+        self.cond = get_varlit(node.children[1], lex.IDENT)
+        self.rhs = [self.cond]
 
     def generate(self, gotos):
         yield '  if {0} goto L{1};'.format(self.cond, gotos[self.next[IFGOTO]])
