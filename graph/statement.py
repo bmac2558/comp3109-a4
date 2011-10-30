@@ -7,6 +7,13 @@ class Literal(object):
     def __init__(self, node):
         self.type = lex.NUM
         self.value = int(node.text)
+
+    def __eq__(self, other):
+        return isinstance(other, Literal) and self.value == other.value
+
+    def __hash__(self):
+        return hash(self.value) | hash(self.type)
+
     def __repr__(self):
         return str(self.value)
 
@@ -14,6 +21,13 @@ class Variable(object):
     def __init__(self, node):
         self.type = lex.IDENT
         self.name = node.text
+
+    def __eq__(self, other):
+        return isinstance(other, Variable) and self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name) | hash(self.type)
+
     def __repr__(self):
         return self.name
 

@@ -164,14 +164,16 @@ class CFGraph(object):
             in_ = set()
             for edge in stmt.next:
                 if edge:
-                    in_ |= out_stmt(edge)
+                    in_ |= out_stmt(edge)[0]
 
             kill_it = (len(kill(stmt) - in_) > 0)
+            print "IN:", in_, stmt
 
             return fn(stmt, in_), kill_it
 
         def destroy(stmt):
             """Eliminate a statement from the graph."""
+            print "OMG DESTROOOOOOOY!"
 
             target = None
             for edge_type in (LINR, GOTO, IFGOTO):
@@ -179,12 +181,12 @@ class CFGraph(object):
                     target = stmt.next[edge_type]
                     break
 
-            for prev, prev_type in backref[stmt]:
+            for prev, prev_type in backrefs[stmt]:
                 prev.next[prev_type] = target
 
             if target:
-                backref[target].extend(backref[stmt])
-            del backref[stmt]
+                backrefs[target].extend(backrefs[stmt])
+            del backrefs[stmt]
 
             self.statements.remove(stmt)
 
@@ -193,8 +195,9 @@ class CFGraph(object):
             stmt = todo.pop(0)
             in_ = set()
             out, kill_it = out_stmt(stmt)
+            print "OUT", out, kill_it, stmt
+            todo.extend([b[0] for b in backrefs[stmt]])
             if kill_it:
-                todo.extend([b[0] for b in backrefs[stmt]])
                 destroy(stmt)
 
 

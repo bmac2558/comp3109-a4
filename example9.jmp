@@ -1,0 +1,9 @@
+L3:
+  b = i < 10;
+  if b goto L2;
+  goto L1;
+L2:
+  i = i + 1;
+  goto L3;
+L1:
+  i = 2;
