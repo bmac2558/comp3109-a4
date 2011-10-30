@@ -118,7 +118,7 @@ class CFGraph(object):
 
     def optimise(self):
         self.UCE()
-###        self.DCE()
+        self.DCE()
 
     def UCE(self):
         """Unreachable code elimination."""
@@ -162,15 +162,40 @@ class CFGraph(object):
 
         def out_stmt(stmt):
             in_ = set()
-            for edge in statement.next:
+            for edge in stmt.next:
                 if edge:
                     in_ |= out_stmt(edge)
 
-            return fn(stmt, in_)
+            kill_it = (len(kill(stmt) - in_) > 0)
 
-        for terminal in terminal_nodes:
+            return fn(stmt, in_), kill_it
+
+        def destroy(stmt):
+            """Eliminate a statement from the graph."""
+
+            target = None
+            for edge_type in (LINR, GOTO, IFGOTO):
+                if stmt.next[edge_type]:
+                    target = stmt.next[edge_type]
+                    break
+
+            for prev, prev_type in backref[stmt]:
+                prev.next[prev_type] = target
+
+            if target:
+                backref[target].extend(backref[stmt])
+            del backref[stmt]
+
+            self.statements.remove(stmt)
+
+        todo = terminal_nodes
+        while todo:
+            stmt = todo.pop(0)
             in_ = set()
-            out = set()
+            out, kill_it = out_stmt(stmt)
+            if kill_it:
+                todo.extend([b[0] for b in backrefs[stmt]])
+                destroy(stmt)
 
 
     def generate(self):
