@@ -1,0 +1,13 @@
+LOOP:
+  b = i < 10;
+  if b goto L1;
+  goto EXIT;
+L1:
+  goto L2;
+EXIT:
+  goto NOTHERE;
+L2:
+  i = i + 1;
+  goto LOOP;
+NOTHERE:
+  i = 2;

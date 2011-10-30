@@ -15,8 +15,15 @@ def main(fileobj):
 
     graph = CFGraph(root.tree)
 
-    print graph
+###    print graph
     print "Start Num: {0:0>2}".format(graph.start.num)
+
+    graph.UCE()
+    print graph
+
+    print 'Reconstituted:'
+    for line in graph.generate():
+        print line
 
     with open('cfg.dot', 'w') as f:
         graph.dotfile(f)

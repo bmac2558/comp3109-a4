@@ -75,6 +75,9 @@ class CFGraph(object):
         
         self.start = self.statements[idx]
 
+        # NOTE equivalence of stmt.num and self.statements.index(stmt)
+        # not guaranteed beyond this point
+
         # eliminate GOTOs
         for stmt in self.statements:
             print stmt
@@ -96,7 +99,13 @@ class CFGraph(object):
                     visited.append(snext)
                     snext = snext.next[GOTO]
 
-                stmt.next[edge_type] = snext
+                # maintain the [LINR, GOTO] convention
+                if stmt.next[edge_type].type == lex.GOTO:
+                    if edge_type == LINR:
+                        stmt.next[LINR] = None
+                    stmt.next[GOTO] = snext
+                else:
+                    stmt.next[edge_type] = snext
 
                 if move_start:
                     print "Moving start (was: {0})".format(stmt)
@@ -106,12 +115,47 @@ class CFGraph(object):
             if stmt.type == lex.GOTO:
                 stmt.next = [None, None]
 
+    def UCE(self):
+        """Unreachable code elimination."""
+
+        cur_nodes = [self.start]
+        for node in cur_nodes:
+###            print "Curr:", cur_nodes
+            for target_node in node.next:
+###                print "  Tgt:", target_node
+                if target_node not in cur_nodes and target_node != None:
+                    cur_nodes.append(target_node)
+
+        self.statements = sorted(cur_nodes, key=lambda x: x.num)
+
+    def reconstitute(self):
+        """Inserts GOTOs; """
+        code = []
+        gotos = {}  # maps goto targets to unique numbers
+        gotos[self.statements[0]] = 0
+        for stmt in self.statements:
+            print stmt, stmt.next
+            if stmt.next[GOTO]:
+                gotos[stmt.next[GOTO]] = len(gotos)
+        return gotos
+
+    def generate(self):
+        gotos = self.reconstitute()
+        print gotos
+
+        for stmt in self.statements:
+            label_num = gotos.get(stmt)
+            if label_num is not None:
+                yield 'L{0}:'.format(label_num)
+            for line in stmt.generate(gotos):
+                yield line
+
     def dotfile(self, fileobj):
         """Write to fileobj a .dot (GraphViz) representation of the graph."""
 
         fileobj.write('digraph CFGraph {\n')
 
-        """# declare all the nodes (typically staements)
+        # declare all the nodes (typically staements)
         fileobj.write('    start;\n')
         for stmt in self.statements:
             if stmt.type not in (lex.BLOCK, lex.GOTO):
@@ -127,34 +171,7 @@ class CFGraph(object):
                     fileobj.write('    s{0} -> s{1};\n'
                                   .format(stmt.num, target.num))
 
-        fileobj.write('}\n')"""
-
-        cur_node = [self.start]
-        written_nodes = []
-        fileobj.write('    start;\n')
-        fileobj.write('    s{0} [label="{1}"] [shape="box"];\n'
-                      .format(self.start.num, self.start.stmt))
-        for node in cur_node:
-            for edge in node.next:
-                if edge not in written_nodes and edge != None:
-                    cur_node.append(edge)
-                    fileobj.write('    s{0} [label="{1}"] [shape="box"];\n'
-                                   .format(edge.num, edge.stmt))
-                    written_nodes.append(node)
-        
-        fileobj.write('    start -> s{0};\n'.format(self.start.num))
-        cur_node = [self.start]
-        written_edges = []
-        for node in cur_node:
-            for target_node in node.next:
-                if (node, target_node) not in written_edges and target_node != None:
-                    cur_node.append(target_node)
-                    fileobj.write('    s{0} -> s{1};\n'
-                                  .format(node.num, target_node.num))
-                    written_edges.append((node, target_node))
-
         fileobj.write('}\n')
-
 
     def __repr__(self):
         return '\n'.join([repr(stmt) for stmt in self.statements])
@@ -166,6 +183,15 @@ class Statement(object):
         self.type = node.type
         self.stmt = node.toStringTree()
         self.next = [None, None]
+
+    def generate(self, gotos):
+        if self.type == lex.IFGOTO:
+            _, _, cond = self.stmt.strip('()').split()
+            yield '  if {0} goto L{1}'.format(cond, gotos[self.next[GOTO]])
+        else:
+            yield '  ' + self.stmt.strip('()')
+        if self.next[GOTO] and self.type != lex.IFGOTO:
+            yield '  goto L{0}'.format(gotos[self.next[GOTO]])
 
     def __repr__(self):
         linr_next = self.next[LINR].num if self.next[LINR] else '//'
