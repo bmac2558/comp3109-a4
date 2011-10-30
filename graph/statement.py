@@ -3,6 +3,8 @@ import build.JumpLexer as lex
 from graph import JumpSyntaxError
 from graph import LINR, GOTO, IFGOTO
 
+# XXX may be severe overkill; if reasonable, reduce these to strings and ints
+
 class Literal(object):
     def __init__(self, node):
         self.type = lex.NUM

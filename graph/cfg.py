@@ -8,65 +8,67 @@ from graph.statement import get_statement
 
 class CFGraph(object):
     def __init__(self, root):
+        self.gotos_expanded = True
         self.statements = []
-        blocks = {}
+        labels = {}
 
         # create all statements and link those that follow linearly
-        last = None
-        for i, child in enumerate(root.children):
-            node = get_statement(child, i)
-            self.statements.append(node)
+        last = None  # the current `stmt` is the LINR child of `last`, if `last`
+        for i, node in enumerate(root.children):
+            stmt = get_statement(node, i)
+            self.statements.append(stmt)
 
             # add the linear `next` pointer to the previous statement
             # (ignore block markers (labels); the `next` pointer will be set to
             # the subsequent statement on the next pass)
-            if last and child.type != lex.REFLABEL:
-                last.next[LINR] = node
+            if last and node.type != lex.REFLABEL:
+                last.next[LINR] = stmt
 
-            if child.type == lex.REFLABEL:
-                target = child.children[0].text
-                blocks[target] = i + 1
+            if node.type == lex.REFLABEL:
+                # a label points to the subsequent 'stmt' (as defined in Jump.g)
+                label = node.children[0].text
+                labels[label] = i + 1
 
-            elif child.type == lex.RETURN:
-                # terminal node
+            elif node.type == lex.RETURN:
+                # terminal statement; has no `next`
                 last = None
 
-            elif child.type in (lex.GOTO, lex.IFGOTO):
-                # goto; ensure the target is in the blocks dict
-                assert child.children[0].type == lex.LABEL
-                target = child.children[0].text
-                if target not in blocks:
-                    blocks[target] = None
+            elif node.type in (lex.GOTO, lex.IFGOTO):
+                # goto; ensure the target is in the labels dict
+                assert node.children[0].type == lex.LABEL
+                target = node.children[0].text
+                if target not in labels:
+                    labels[target] = None
 
-                if child.type == lex.GOTO:
+                # IFGOTOs have a LINR next; GOTOs do not
+                if node.type == lex.GOTO:
                     last = None
                 else:
-                    last = node
+                    last = stmt
 
             else:
                 # assignment statement
-                last = node
+                last = stmt
 
         # check that all GOTO targets exist
-        for label, target in blocks.iteritems():
+        for label, target in labels.iteritems():
             if target is None:
                 raise JumpSyntaxError("GOTO target '{0}' does not exist."
                                       .format(label))
-        # forge links from (if)goto statements
+
+        # forge GOTO and IFGOTO links
         for i, stmt in enumerate(self.statements):
-            if stmt.type == lex.GOTO:
-                target = root.children[i].children[0].text
-                stmt.next[GOTO] = self.statements[blocks[target]]
-            elif stmt.type == lex.IFGOTO:
-                target = root.children[i].children[0].text
-                stmt.next[IFGOTO] = self.statements[blocks[target]]
+            if stmt.type in (lex.GOTO, lex.IFGOTO):
+                edge_type = GOTO if stmt.type == lex.GOTO else IFGOTO
+                target_label = root.children[i].children[0].text
+                stmt.next[edge_type] = self.statements[labels[target_label]]
 
-
-        # find the start (entry) node
+        # find the start (entry) statement
         idx = 0
         while self.statements[idx].type == lex.REFLABEL:
             idx += 1
             if idx > len(self.statements):
+                # this should never happen; should be a syntax error in ANTLR
                 raise RuntimeError("Cannot find an entry statement!")
         
         self.start = self.statements[idx]
@@ -78,9 +80,19 @@ class CFGraph(object):
 
     def eliminate_gotos(self):
         """
+        Remove all GOTO statement nodes; preserving references.
+
+        The references are preserved in the preceiding statement's GOTO pointer
+        slot in its `next` attribute.
+
         """
-        # eliminate GOTOs
+        assert self.gotos_expanded
+
         for stmt in self.statements:
+            # we need to repoint self.start if it's currently on a GOTO
+            # about to be eliminated...
+            move_start = (stmt == self.start and stmt.type == lex.GOTO)
+
             for edge_type in (LINR, GOTO, IFGOTO):
 
                 snext = stmt.next[edge_type]
@@ -88,13 +100,12 @@ class CFGraph(object):
                 if snext is None:
                     continue
 
-                # we need to repoint self.start if it's currently on a GOTO
-                # about to be eliminated...
-                move_start = (stmt == self.start and stmt.type == lex.GOTO)
-
+                # work though any consecutive GOTO references until we hit a
+                # 'concrete' statement
                 visited = []
                 while snext.type == lex.GOTO:
                     if snext in visited:
+                        # XXX handle this better?  or is exploding appropriate?
                         raise JumpSyntaxError("OMG INFINITE GOTO LOOPSIES!")
                     visited.append(snext)
                     snext = snext.next[GOTO]
@@ -110,16 +121,41 @@ class CFGraph(object):
                     stmt.next[edge_type] = snext
 
                 if move_start:
-###                    print "Moving start (was: {0})".format(stmt)
+                    assert edge_type == GOTO, \
+                        "Should only be moving self.start if it points to a GOTO."
                     self.start = snext
 
         for stmt in self.statements:
             if stmt.type == lex.GOTO:
                 stmt.next = [None, None, None]
 
+        self.gotos_expanded = False
+
+    def get_backrefs(self):
+        """Return a backrefs mapping from each stmt to those that refer to it."""
+
+        # { stmt: [ ( prev, type ), ... ], ... }; type in (LINR, GOTO, IFGOTO)
+        backrefs = defaultdict(list)
+        backrefs[self.start] = []
+
+        for stmt in self.statements:
+            for edge_type in (LINR, GOTO, IFGOTO):
+
+                target = stmt.next[edge_type]
+                if target is not None:
+                    backrefs[target].append((stmt, edge_type))
+
+        return dict(backrefs)
+
     def optimise(self):
         self.UCE()
+        print
+        print "  ---> Post-UCE:"
+        print self
         self.DCE()
+        print
+        print "  ---> Post-DCE:"
+        print self
 
     def UCE(self):
         """Unreachable code elimination."""
@@ -137,25 +173,17 @@ class CFGraph(object):
     def DCE(self):
         """Dead code elimination."""
 
-        # first, find all backrefs of GOTOs
-        # { stmt: [ ( prev, type ), ... ], ... }; type in (LINR, GOTO, IFGOTO)
-        backrefs = defaultdict(list)
+        backrefs = self.get_backrefs()
+
         terminal_nodes = []
         for stmt in self.statements:
-
             if stmt.next == [None, None, None]:
                 terminal_nodes.append(stmt)
-                continue
-
-            for edge_type in (LINR, GOTO, IFGOTO):
-                target = stmt.next[edge_type]
-                if target is not None:
-                    backrefs[target].append((stmt, edge_type))
-        print
+###        print
 ###        print "RIGHT HERE BOYZ!"
 ###        for key in sorted(backrefs.keys(), key=lambda x: x.num):
 ###            print key, backrefs[key]
-        print "Terminal Nodes:", terminal_nodes
+###        print "Terminal Nodes:", terminal_nodes
 
         gen = lambda stmt: set(stmt.rhs)
         kill = lambda stmt: set(stmt.lhs)
@@ -170,25 +198,23 @@ class CFGraph(object):
                     in_ |= out_stmt(edge, visited)[0]
 
             kill_it = (len(kill(stmt) - in_) > 0)
-            print "IN:", in_, stmt
+###            print "IN:", in_, stmt
 
             return fn(stmt, in_), kill_it
 
         def destroy(stmt):
             """Eliminate a statement from the graph."""
-            print "OMG DESTROOOOOOOY!"
 
-            target = None
-            for edge_type in (LINR, GOTO, IFGOTO):
-                if stmt.next[edge_type]:
-                    target = stmt.next[edge_type]
-                    break
+            assert stmt.type != lex.IFGOTO
 
-            for prev, prev_type in backrefs[stmt]:
-                prev.next[prev_type] = target
+            for prev, _ in backrefs[stmt]:
+                for edge_type in (LINR, GOTO):
+                    prev.next[edge_type] = stmt.next[edge_type]
 
-            if target:
-                backrefs[target].extend(backrefs[stmt])
+            for edge_type in (LINR, GOTO):
+                target = stmt.next[edge_type]
+                if target:
+                    backrefs[target].extend(backrefs[stmt])
             del backrefs[stmt]
 
             self.statements.remove(stmt)
@@ -198,14 +224,14 @@ class CFGraph(object):
         todo.extend(terminal_nodes)
         visited = []
         while todo:
-            print stmt
+###            print stmt
             stmt = todo.pop(0)
             if stmt in visited:
                 continue
             visited.append(stmt)
             in_ = set()
             out, kill_it = out_stmt(stmt)
-            print "OUT", out, kill_it, stmt
+###            print "OUT", out, kill_it, stmt
             todo.extend([b[0] for b in backrefs[stmt]])
             if kill_it:
                 destroy(stmt)
@@ -213,20 +239,35 @@ class CFGraph(object):
 
     def generate(self):
         gotos = {}  # maps goto targets to unique numbers
-        gotos[self.statements[0]] = 0
+        gotos[self.start] = 0
 
         for stmt in self.statements:
-            if stmt.next[GOTO]:
-                gotos[stmt.next[GOTO]] = len(gotos)
-            if stmt.next[IFGOTO]:
-                gotos[stmt.next[IFGOTO]] = len(gotos)
+            for edge_type in (GOTO, IFGOTO):
+                target = stmt.next[edge_type]
+                if target == self.start:
+                    continue
+                if target:
+                    gotos[target] = len(gotos)
 
-        for stmt in self.statements:
+        # start and the start node and print linearly where possible;
+        # sticking goto targets on the todo stack
+        todo = [self.start]
+        visited = [self.start]
+        while todo:
+            stmt = todo.pop()
+
             label_num = gotos.get(stmt)
             if label_num is not None:
                 yield 'L{0}:'.format(label_num)
+
             for line in stmt.generate(gotos):
                 yield line
+
+            for edge_type in (GOTO, IFGOTO, LINR):
+                target = stmt.next[edge_type]
+                if target and target not in visited:
+                    todo.append(target)
+                    visited.append(target)
 
     def dotfile(self, fileobj):
         """Write to fileobj a .dot (GraphViz) representation of the graph."""

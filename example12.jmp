@@ -1,0 +1,7 @@
+  a = 6;
+  goto L3;
+L2:
+  a = a + a;
+L3:
+  b = 2;
+  goto L2;
