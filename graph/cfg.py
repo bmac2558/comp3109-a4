@@ -150,7 +150,7 @@ class CFGraph(object):
                 if target is not None:
                     backrefs[target].append((stmt, edge_type))
 
-        return dict(backrefs)
+        return backrefs
 
     def optimise(self):
         self.UCE()
@@ -260,25 +260,6 @@ class CFGraph(object):
 
             return fn(stmt, in_), kill_it
 
-        def destroy(stmt):
-            """Eliminate a statement from the graph."""
-
-            assert stmt.type != lex.IFGOTO
-
-            for prev, _ in backrefs[stmt]:
-                for edge_type in (LINR, GOTO):
-                    prev.next[edge_type] = stmt.next[edge_type]
-
-            for edge_type in (LINR, GOTO):
-                target = stmt.next[edge_type]
-                if target:
-                    backrefs[target].extend(backrefs[stmt])
-                    if self.start == stmt:
-                        self.start = target
-            del backrefs[stmt]
-
-            self.statements.remove(stmt)
-
         todo = []
         todo.extend(terminal_nodes)
         visited = []
@@ -293,7 +274,7 @@ class CFGraph(object):
 ###            print "OUT", out, kill_it, stmt
             todo.extend([b[0] for b in backrefs[stmt]])
             if kill_it:
-                destroy(stmt)
+                self.remove(stmt, backrefs)
 
     def remove(self, stmt, backrefs, ifgoto_type=None):
         """Eliminate a statement from the graph."""
@@ -321,7 +302,9 @@ class CFGraph(object):
                 target = stmt.next[edge_type]
                 if target:
                     break
-
+        if self.start == stmt:
+            self.start = target
+        
         backrefs[target].extend(backrefs[stmt])
         del backrefs[stmt]
 
