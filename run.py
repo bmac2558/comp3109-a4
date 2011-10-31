@@ -15,19 +15,30 @@ def main(fileobj):
 
     graph = CFGraph(root.tree)
 
-    graph.UCE()
-    print "Start Num: {0:0>2}".format(graph.start.num)
-    print
-    print "===> Unoptimised:"
-    print graph
-    graph.optimise()
-    print
-    print "===> Optimised:"
-    print graph
-    print
-    print '===> Reconstituted:'
-    for line in graph.generate():
-        print line
+#    graph.UCE()
+#    print "Start Num: {0:0>2}".format(graph.start.num)
+#    print
+#    print "===> Unoptimised:"
+#    print graph
+#    graph.optimise()
+#    print
+#    print "===> Optimised:"
+#    print graph
+#    print
+#    
+#    print '===> Reconstituted:'
+    
+    optimised = False
+    code = [line for line in graph.generate()]
+    while not optimised:
+        graph.optimise()
+        current_code = [line for line in graph.generate()]
+        if code == current_code:
+            optimised = True
+        else:
+            code = current_code
+    
+    print "\n".join(code)
 
     with open('cfg.dot', 'w') as f:
         graph.dotfile(f)
