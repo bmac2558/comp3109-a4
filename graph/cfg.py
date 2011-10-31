@@ -1,9 +1,12 @@
 import sys
 from collections import defaultdict
+from copy import deepcopy
+
 import build.JumpLexer as lex
 
 from graph import JumpSyntaxError
 from graph import LINR, GOTO, IFGOTO
+from graph.statement import AssignStmt, AssignOpStmt, IfGotoStmt
 from graph.statement import get_statement
 
 class CFGraph(object):
@@ -70,7 +73,7 @@ class CFGraph(object):
             if idx > len(self.statements):
                 # this should never happen; should be a syntax error in ANTLR
                 raise RuntimeError("Cannot find an entry statement!")
-        
+
         self.start = self.statements[idx]
 
         # NOTE equivalence of stmt.num and self.statements.index(stmt)
@@ -160,6 +163,9 @@ class CFGraph(object):
         print
         print "  ---> Post-DCE:"
         print self
+        self.CP()
+        print
+        print "  ---> Post-CP:"
 
     def UCE(self):
         """Unreachable code elimination."""
@@ -175,6 +181,9 @@ class CFGraph(object):
         self.statements = sorted(cur_nodes, key=lambda x: x.num)
 
     def JE(self):
+        """Jump elimination."""
+        # XXX not optimal
+
         assert not self.gotos_expanded
 
         dists = dict()
@@ -188,7 +197,8 @@ class CFGraph(object):
             visited.update(set([t for t in curr.next if t]))
 
         # make a best-effort attempt to have as many stmts with one LINR
-        # parent (backref) as possible
+        # parent (backref) as possible, and for each LINR parent to be as close
+        # to the start node as possible
         backrefs = self.get_backrefs()
         for stmt, parents in backrefs.iteritems():
             if stmt == self.start:
@@ -282,10 +292,88 @@ class CFGraph(object):
             if kill_it:
                 destroy(stmt)
 
+    def remove(self, stmt, backrefs, ifgoto_type=None):
+        """Eliminate a statement from the graph."""
 
-    def generate(self):
-        gotos = {}  # maps goto targets to unique numbers
-        gotos[self.start] = 0
+        assert stmt.type != lex.IFGOTO or ifgoto_type in (LINR, IFGOTO), \
+                "Need to know whether to use an IFGOTO's LINR or IFGOTO child."
+
+        assert not (stmt.next[LINR] and stmt.next[GOTO])
+
+        for prev, edge_type in backrefs[stmt]:
+            if edge_type == IFGOTO:
+                prev.next[IFGOTO] = stmt.next[ifgoto_type]
+            else:
+                # parent either points via a LINR or GOTO, and only to the
+                # current stmt, so (I believe) it is safe to override with
+                # prejudice
+                for et in (LINR, GOTO):
+                    prev.next[et] = stmt.next[et]
+
+        # fix up the backrefs dict
+        if stmt.type == lex.IFGOTO:
+            target = stmt.next[ifgoto_type]
+        else:
+            for edge_type in (LINR, GOTO):
+                target = stmt.next[edge_type]
+                if target:
+                    break
+
+        backrefs[target].extend(backrefs[stmt])
+        del backrefs[stmt]
+
+        self.statements.remove(stmt)
+
+    def CP(self, start=None, values=None, visited=None, backrefs=None, labels=None):
+        """Constant propagation."""
+
+        todo = [start or self.start]
+        values = values or dict()
+        visited = visited or set()
+        backrefs = backrefs or self.get_backrefs()
+        labels = labels or self.get_labels()
+
+        while todo:
+            curr = todo.pop()
+
+            if curr in visited:
+                continue
+            visited.add(curr)
+
+            # anything with a label is a goto target, so cannot safely continue
+            # propagation
+            if curr in labels:
+                values = dict()
+
+            if isinstance(curr, (AssignStmt, AssignOpStmt)):
+###                print "OASTMT:", curr
+###                print " (Vals):", values
+                curr.update(values)
+###                print " (Vals):", values
+###                print "NASTMT:", curr
+
+            if isinstance(curr, IfGotoStmt):
+                # remove IFGOTOs if their condition is a constant
+                edge_type = curr.get_next(values)
+                if edge_type is not None:
+                    self.remove(curr, backrefs, edge_type)
+                    if curr in labels:
+                        labels = self.get_labels()
+
+            else:
+                # continue linearly
+                if curr.next[LINR]:
+                    todo.append(curr.next[LINR])
+
+                # check jump targets; this may be unsafe
+                for edge_type in (GOTO, IFGOTO):
+                    if curr.next[edge_type]:
+                        self.CP(curr.next[edge_type], deepcopy(values), visited, backrefs, labels)
+
+    def get_labels(self):
+        """Returns a map of goto targets to unique numbers."""
+        labels = {}
+        labels[self.start] = 0
 
         for stmt in self.statements:
             for edge_type in (GOTO, IFGOTO):
@@ -293,7 +381,12 @@ class CFGraph(object):
                 if target == self.start:
                     continue
                 if target:
-                    gotos[target] = len(gotos)
+                    labels[target] = len(labels)
+
+        return labels
+
+    def generate(self):
+        gotos = self.get_labels()
 
         # start and the start node and print linearly where possible;
         # sticking goto targets on the todo stack

@@ -1,3 +1,5 @@
+import operator as op
+
 import build.JumpLexer as lex
 
 from graph import JumpSyntaxError
@@ -5,42 +7,54 @@ from graph import LINR, GOTO, IFGOTO
 
 # XXX may be severe overkill; if reasonable, reduce these to strings and ints
 
-class Literal(object):
-    def __init__(self, node):
-        self.type = lex.NUM
-        self.value = int(node.text)
+###class Literal(object):
+###    def __init__(self, node):
+###        self.type = lex.NUM
+###        self.value = int(node.text)
 
-    def __eq__(self, other):
-        return isinstance(other, Literal) and self.value == other.value
+###    def __eq__(self, other):
+###        return isinstance(other, Literal) and self.value == other.value
 
-    def __hash__(self):
-        return hash(self.value) | hash(self.type)
+###    def __hash__(self):
+###        return hash(self.value) | hash(self.type)
 
-    def __repr__(self):
-        return str(self.value)
+###    def __repr__(self):
+###        return str(self.value)
 
-class Variable(object):
-    def __init__(self, node):
-        self.type = lex.IDENT
-        self.name = node.text
+###class Variable(object):
+###    def __init__(self, node):
+###        self.type = lex.IDENT
+###        self.name = node.text
 
-    def __eq__(self, other):
-        return isinstance(other, Variable) and self.name == other.name
+###    def __eq__(self, other):
+###        return isinstance(other, Variable) and self.name == other.name
 
-    def __hash__(self):
-        return hash(self.name) | hash(self.type)
+###    def __hash__(self):
+###        return hash(self.name) | hash(self.type)
 
-    def __repr__(self):
-        return self.name
+###    def __repr__(self):
+###        return self.name
 
 def get_varlit(node, force=None):
     if force is None or node.type == force:
         if node.type == lex.NUM:
-            return Literal(node)
+###            return Literal(node)
+            return int(node.text)
         if node.type == lex.IDENT:
-            return Variable(node)
+###            return Variable(node)
+            return str(node.text)
 
     raise JumpSyntaxError("Inappropriate type '{0}'.".format(node.type))
+
+OPERATORS = {
+    '+': op.add,
+    '-': op.sub,
+    '*': op.mul,
+    '/': op.div,
+    '<': op.lt,
+    '>': op.gt,
+    '==': op.eq,
+}
 
 class Statement(object):
     """Has a statement for evaluation and a list of pointers to the next Statements"""
@@ -82,7 +96,21 @@ class AssignStmt(Statement):
         self.var = get_varlit(node.children[0], lex.IDENT)
         self.lhs = [self.var]
         self.source = get_varlit(node.children[1])
-        self.rhs = [self.source] if isinstance(self.source, Variable) else []
+###        self.rhs = [self.source] if isinstance(self.source, Variable) else []
+        self.rhs = [self.source] if isinstance(self.source, str) else []
+
+    def update(self, values):
+        """Replace RHS variables with literals, if in values; cull any LHS vars."""
+
+        if isinstance(self.source, str):
+            self.source = values.get(self.source, self.source)
+        if self.var in values:
+            del values[self.var]
+
+        if isinstance(self.source, int):
+            values[self.var] = self.source
+        elif self.var in values:
+            del values[self.var]
 
     def generate(self, gotos):
         yield '  {0} = {1};'.format(self.var, self.source)
@@ -97,7 +125,23 @@ class AssignOpStmt(Statement):
         self.operator = node.children[2].text
         self.operands = [get_varlit(node.children[1]),
                          get_varlit(node.children[3])]
-        self.rhs = [oper for oper in self.operands if isinstance(oper, Variable)]
+###        self.rhs = [oper for oper in self.operands if isinstance(oper, Variable)]
+        self.rhs = [oper for oper in self.operands if isinstance(oper, str)]
+
+    def update(self, values):
+        """Replace RHS variables with literals, if in values; cull any LHS vars."""
+
+        for i, op in enumerate(self.operands):
+            if isinstance(op, str):
+                self.operands[i] = values.get(self.operands[i], self.operands[i])
+
+        op1 = self.operands[0]
+        op2 = self.operands[1]
+
+        if isinstance(op1, int) and isinstance(op2, int):
+            values[self.var] = OPERATORS[self.operator](op1, op2)
+        elif self.var in values:
+            del values[self.var]
 
     def generate(self, gotos):
         yield '  {0} = {1} {2} {3};'.format(self.var, self.operands[0],
@@ -110,6 +154,12 @@ class IfGotoStmt(Statement):
         super(IfGotoStmt, self).__init__(node, num)
         self.cond = get_varlit(node.children[1], lex.IDENT)
         self.rhs = [self.cond]
+
+    def get_next(self, values):
+        """Returns None if next is undecidable."""
+        if self.cond in values:
+            return IFGOTO if values[self.cond] != 0 else LINR
+        return None
 
     def generate(self, gotos):
         yield '  if {0} goto L{1};'.format(self.cond, gotos[self.next[IFGOTO]])
