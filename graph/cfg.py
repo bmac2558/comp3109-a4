@@ -273,6 +273,8 @@ class CFGraph(object):
                 target = stmt.next[edge_type]
                 if target:
                     backrefs[target].extend(backrefs[stmt])
+                    if self.start == stmt:
+                        self.start = target
             del backrefs[stmt]
 
             self.statements.remove(stmt)
