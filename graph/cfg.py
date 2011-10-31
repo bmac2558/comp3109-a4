@@ -6,7 +6,7 @@ import build.JumpLexer as lex
 
 from graph import JumpSyntaxError
 from graph import LINR, GOTO, IFGOTO
-from graph.statement import AssignStmt, AssignOpStmt, IfGotoStmt
+from graph.statement import AssignStmt, AssignOpStmt, IfGotoStmt, ReturnStmt
 from graph.statement import get_statement
 
 class CFGraph(object):
@@ -345,7 +345,7 @@ class CFGraph(object):
             if curr in labels:
                 values = dict()
 
-            if isinstance(curr, (AssignStmt, AssignOpStmt)):
+            if isinstance(curr, (AssignStmt, AssignOpStmt, ReturnStmt)):
 ###                print "OASTMT:", curr
 ###                print " (Vals):", values
                 curr.update(values)

@@ -5,47 +5,6 @@ import build.JumpLexer as lex
 from graph import JumpSyntaxError
 from graph import LINR, GOTO, IFGOTO
 
-# XXX may be severe overkill; if reasonable, reduce these to strings and ints
-
-###class Literal(object):
-###    def __init__(self, node):
-###        self.type = lex.NUM
-###        self.value = int(node.text)
-
-###    def __eq__(self, other):
-###        return isinstance(other, Literal) and self.value == other.value
-
-###    def __hash__(self):
-###        return hash(self.value) | hash(self.type)
-
-###    def __repr__(self):
-###        return str(self.value)
-
-###class Variable(object):
-###    def __init__(self, node):
-###        self.type = lex.IDENT
-###        self.name = node.text
-
-###    def __eq__(self, other):
-###        return isinstance(other, Variable) and self.name == other.name
-
-###    def __hash__(self):
-###        return hash(self.name) | hash(self.type)
-
-###    def __repr__(self):
-###        return self.name
-
-def get_varlit(node, force=None):
-    if force is None or node.type == force:
-        if node.type == lex.NUM:
-###            return Literal(node)
-            return int(node.text)
-        if node.type == lex.IDENT:
-###            return Variable(node)
-            return str(node.text)
-
-    raise JumpSyntaxError("Inappropriate type '{0}'.".format(node.type))
-
 OPERATORS = {
     '+': op.add,
     '-': op.sub,
@@ -55,6 +14,15 @@ OPERATORS = {
     '>': op.gt,
     '==': op.eq,
 }
+
+def get_varlit(node, force=None):
+    if force is None or node.type == force:
+        if node.type == lex.NUM:
+            return int(node.text)
+        if node.type == lex.IDENT:
+            return str(node.text)
+
+    raise JumpSyntaxError("Inappropriate type '{0}'.".format(node.type))
 
 class Statement(object):
     """Has a statement for evaluation and a list of pointers to the next Statements"""
@@ -85,6 +53,10 @@ class ReturnStmt(Statement):
         self.var = get_varlit(node.children[0], lex.IDENT)
         self.rhs = [self.var]
 
+    def update(self, values):
+        if isinstance(self.var, str):
+            self.var = values.get(self.var, self.var)
+
     def generate(self, gotos):
         yield '  return {0};'.format(self.var)
         for line in super(ReturnStmt, self).generate(gotos):
@@ -96,7 +68,6 @@ class AssignStmt(Statement):
         self.var = get_varlit(node.children[0], lex.IDENT)
         self.lhs = [self.var]
         self.source = get_varlit(node.children[1])
-###        self.rhs = [self.source] if isinstance(self.source, Variable) else []
         self.rhs = [self.source] if isinstance(self.source, str) else []
 
     def update(self, values):
@@ -125,7 +96,6 @@ class AssignOpStmt(Statement):
         self.operator = node.children[2].text
         self.operands = [get_varlit(node.children[1]),
                          get_varlit(node.children[3])]
-###        self.rhs = [oper for oper in self.operands if isinstance(oper, Variable)]
         self.rhs = [oper for oper in self.operands if isinstance(oper, str)]
 
     def update(self, values):
@@ -139,7 +109,13 @@ class AssignOpStmt(Statement):
         op2 = self.operands[1]
 
         if isinstance(op1, int) and isinstance(op2, int):
-            values[self.var] = OPERATORS[self.operator](op1, op2)
+            result = OPERATORS[self.operator](op1, op2)
+            if result is True:
+                result = 1
+            elif result is False:
+                result = 0
+            assert isinstance(result, int)
+            values[self.var] = result
         elif self.var in values:
             del values[self.var]
 
