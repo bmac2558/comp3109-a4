@@ -152,31 +152,35 @@ class CFGraph(object):
 
         return backrefs
 
-    def optimise(self):
-        self.UCE()
-        print
-        print "  ---> Post-UCE:"
-        print self
-        self.JE()
-        print
-        print "  ---> Post-J:"
-        print self
-        self.DCE()
-        print
-        print "  ---> Post-DCE:"
-        print self
-        self.CP()
-        print
-        print "  ---> Post-CP:"
+    def optimise(self, debug=False):
+        if debug:
+            self.UCE()
+            print
+            print "  ---> Post-UCE:"
+            print self
+            self.JE()
+            print
+            print "  ---> Post-J:"
+            print self
+            self.DCE()
+            print
+            print "  ---> Post-DCE:"
+            print self
+            self.CP()
+            print
+            print "  ---> Post-CP:"
+        else:
+            self.UCE()
+            self.JE()
+            self.DCE()
+            self.CP()
 
     def UCE(self):
         """Unreachable code elimination."""
 
         cur_nodes = [self.start]
         for node in cur_nodes:
-###            print "Curr:", cur_nodes
             for target_node in node.next:
-###                print "  Tgt:", target_node
                 if target_node not in cur_nodes and target_node != None:
                     cur_nodes.append(target_node)
 
@@ -237,11 +241,6 @@ class CFGraph(object):
         for stmt in self.statements:
             if stmt.next == [None, None, None]:
                 terminal_nodes.append(stmt)
-###        print
-###        print "RIGHT HERE BOYZ!"
-###        for key in sorted(backrefs.keys(), key=lambda x: x.num):
-###            print key, backrefs[key]
-###        print "Terminal Nodes:", terminal_nodes
 
         gen = lambda stmt: set(stmt.rhs)
         kill = lambda stmt: set(stmt.lhs)
@@ -256,7 +255,6 @@ class CFGraph(object):
                     in_ |= out_stmt(edge, visited)[0]
 
             kill_it = (len(kill(stmt) - in_) > 0)
-###            print "IN:", in_, stmt
 
             return fn(stmt, in_), kill_it
 
@@ -264,14 +262,12 @@ class CFGraph(object):
         todo.extend(terminal_nodes)
         visited = []
         while todo:
-###            print stmt
             stmt = todo.pop(0)
             if stmt in visited:
                 continue
             visited.append(stmt)
             in_ = set()
             out, kill_it = out_stmt(stmt)
-###            print "OUT", out, kill_it, stmt
             todo.extend([b[0] for b in backrefs[stmt]])
             if kill_it:
                 self.remove(stmt, backrefs)
@@ -332,11 +328,7 @@ class CFGraph(object):
                 values = dict()
 
             if isinstance(curr, (AssignStmt, AssignOpStmt, ReturnStmt)):
-###                print "OASTMT:", curr
-###                print " (Vals):", values
                 curr.update(values)
-###                print " (Vals):", values
-###                print "NASTMT:", curr
 
             if isinstance(curr, IfGotoStmt):
                 # remove IFGOTOs if their condition is a constant

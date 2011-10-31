@@ -11,27 +11,12 @@ def main(fileobj):
     parser = JumpParser(tokens)
     root = parser.prog()
 
-    print root.tree.toStringTree()
-
     graph = CFGraph(root.tree)
 
-#    graph.UCE()
-#    print "Start Num: {0:0>2}".format(graph.start.num)
-#    print
-#    print "===> Unoptimised:"
-#    print graph
-#    graph.optimise()
-#    print
-#    print "===> Optimised:"
-#    print graph
-#    print
-#    
-#    print '===> Reconstituted:'
-    
     optimised = False
     code = [line for line in graph.generate()]
     while not optimised:
-        graph.optimise()
+        graph.optimise(True)
         current_code = [line for line in graph.generate()]
         if code == current_code:
             optimised = True
@@ -45,7 +30,7 @@ def main(fileobj):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 2 or (len(sys.argv) == 1 and sys.argv[1] in ('-h', '--help')):
+    if len(sys.argv) > 3 or (len(sys.argv) == 1 and sys.argv[1] in ('-h', '--help')):
         print >> sys.stderr, 'Usage: {0} [filename]'.format(sys.argv[0])
         sys.exit(1)
 

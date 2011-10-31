@@ -50,7 +50,7 @@ class Statement(object):
 class ReturnStmt(Statement):
     def __init__(self, node, num):
         super(ReturnStmt, self).__init__(node, num)
-        self.var = get_varlit(node.children[0], lex.IDENT)
+        self.var = get_varlit(node.children[0],)
         self.rhs = [self.var]
 
     def update(self, values):
@@ -128,7 +128,7 @@ class AssignOpStmt(Statement):
 class IfGotoStmt(Statement):
     def __init__(self, node, num):
         super(IfGotoStmt, self).__init__(node, num)
-        self.cond = get_varlit(node.children[1], lex.IDENT)
+        self.cond = get_varlit(node.children[1],)
         self.rhs = [self.cond]
 
     def get_next(self, values):
