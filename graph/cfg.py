@@ -11,6 +11,8 @@ from graph.statement import get_statement
 
 class CFGraph(object):
     def __init__(self, root):
+        sys.setrecursionlimit(30)
+
         self.gotos_expanded = True
         self.statements = []
         labels = {}
@@ -275,7 +277,6 @@ class CFGraph(object):
 
             self.statements.remove(stmt)
 
-        sys.setrecursionlimit(20)
         todo = []
         todo.extend(terminal_nodes)
         visited = []
@@ -373,14 +374,11 @@ class CFGraph(object):
     def get_labels(self):
         """Returns a map of goto targets to unique numbers."""
         labels = {}
-        labels[self.start] = 0
 
         for stmt in self.statements:
             for edge_type in (GOTO, IFGOTO):
                 target = stmt.next[edge_type]
-                if target == self.start:
-                    continue
-                if target:
+                if target and target not in labels:
                     labels[target] = len(labels)
 
         return labels
